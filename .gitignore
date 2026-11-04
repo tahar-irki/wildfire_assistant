@@ -1,0 +1,92 @@
+
+# ==========================================
+# PYTHON
+# ==========================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Python build files
+build/
+dist/
+*.egg-info/
+
+# ==========================================
+# ENVIRONMENT VARIABLES / SECRETS
+# ==========================================
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+
+# ==========================================
+# MACHINE LEARNING MODELS
+# ==========================================
+
+# Downloaded pretrained models
+models/base/
+models/downloaded/
+
+# Training outputs and checkpoints
+checkpoints/
+outputs/
+runs/
+
+# Model weights
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+*.gguf
+
+# ==========================================
+# DATASETS
+# ==========================================
+
+data/raw/*
+!data/raw/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
+
+# Keep only small examples in examples/
+# Do not commit private or large datasets.
+
+# ==========================================
+# RAG VECTOR DATABASE
+# ==========================================
+
+vector_store/
+faiss_index/
+embeddings_cache/
+
+# ==========================================
+# JUPYTER
+# ==========================================
+
+.ipynb_checkpoints/
+
+# ==========================================
+# EDITORS
+# ==========================================
+
+.vscode/
+.idea/
+
+# ==========================================
+# SYSTEM FILES
+# ==========================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
