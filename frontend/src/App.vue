@@ -1,5 +1,9 @@
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
+import {
+  sendChatMessage,
+  checkBackendHealth
+} from './services/api'
 
 // -----------------------------
 // State
@@ -8,7 +12,37 @@ import { ref, computed, nextTick, watch } from 'vue'
 const question = ref('')
 const loading = ref(false)
 const mobileMenuOpen = ref(false)
+
+const backendStatus = ref('checking')
+
 const STORAGE_KEY = 'forestguard-conversations'
+
+// -----------------------------
+// Backend connection
+// -----------------------------
+
+const backendStatusLabel = computed(() => {
+  if (backendStatus.value === 'connected') return 'Connected'
+  if (backendStatus.value === 'checking') return 'Connecting...'
+  return 'Offline'
+})
+
+async function verifyBackendConnection() {
+  try {
+    const health = await checkBackendHealth()
+
+    backendStatus.value =
+      health.model_loaded ? 'connected' : 'offline'
+
+  } catch (error) {
+    console.error('Backend connection failed:', error)
+    backendStatus.value = 'offline'
+  }
+}
+
+onMounted(() => {
+  verifyBackendConnection()
+})
 
 // -----------------------------
 // Copy answer
@@ -18,15 +52,19 @@ async function copyMessage(text) {
   try {
     await navigator.clipboard.writeText(text)
     alert('Answer copied successfully!')
+
   } catch (error) {
     const textarea = document.createElement('textarea')
+
     textarea.value = text
     textarea.style.position = 'fixed'
     textarea.style.opacity = '0'
+
     document.body.appendChild(textarea)
     textarea.select()
 
     const copied = document.execCommand('copy')
+
     textarea.remove()
 
     alert(copied ? 'Answer copied!' : 'Could not copy the answer.')
@@ -39,6 +77,7 @@ async function copyMessage(text) {
 
 function rateMessage(messageId, rating) {
   const chat = activeConversation.value
+
   if (!chat) return
 
   const message = chat.messages.find(
@@ -99,6 +138,7 @@ function loadConversations() {
         return parsed
       }
     }
+
   } catch (error) {
     console.error('Could not load conversations:', error)
   }
@@ -107,7 +147,10 @@ function loadConversations() {
 }
 
 const conversations = ref(loadConversations())
-const activeConversationId = ref(conversations.value[0].id)
+
+const activeConversationId = ref(
+  conversations.value[0].id
+)
 
 const activeConversation = computed(() => {
   return conversations.value.find(
@@ -120,14 +163,17 @@ const messages = computed(() => {
 })
 
 // -----------------------------
-// Save conversations automatically
+// Save conversations
 // -----------------------------
 
 watch(
   conversations,
   value => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(value)
+      )
     } catch (error) {
       console.error('Could not save conversations:', error)
     }
@@ -151,7 +197,9 @@ const suggestions = [
 // -----------------------------
 
 function selectConversation(id) {
-  const chat = conversations.value.find(c => c.id === id)
+  const chat = conversations.value.find(
+    item => item.id === id
+  )
 
   if (!chat) return
 
@@ -205,69 +253,6 @@ function deleteConversation(id) {
 }
 
 // -----------------------------
-// Mock AI responses
-// -----------------------------
-
-function getMockResponse(text) {
-  const q = text.toLowerCase()
-
-  if (
-    q.includes('prevent') ||
-    q.includes('prevention')
-  ) {
-    return {
-      text: 'Forest fires can be prevented through responsible behavior, removing dry vegetation near vulnerable areas, avoiding unattended campfires, and reporting smoke or suspicious fires early.',
-      sources: [
-        { title: 'Forest Fire Prevention Guide', page: 12 },
-        { title: 'Forest Management Handbook', page: 18 }
-      ]
-    }
-  }
-
-  if (
-    q.includes('cause') ||
-    q.includes('why')
-  ) {
-    return {
-      text: 'Wildfires can start naturally, for example through lightning, or because of human activities such as unattended fires and discarded cigarettes. Weather conditions and dry vegetation can help fires spread.',
-      sources: [
-        { title: 'Wildfire Causes Report', page: 8 },
-        { title: 'Forest Safety Handbook', page: 15 }
-      ]
-    }
-  }
-
-  if (q.includes('climate')) {
-    return {
-      text: 'Climate change can increase wildfire risk in some regions by contributing to higher temperatures, longer dry periods, and drier vegetation.',
-      sources: [
-        { title: 'Climate and Forests Report', page: 21 }
-      ]
-    }
-  }
-
-  if (
-    q.includes('during') ||
-    q.includes('safety') ||
-    q.includes('safe')
-  ) {
-    return {
-      text: 'During a forest fire, follow instructions from local emergency services, move away from the affected area, and use official evacuation routes. Never approach the fire.',
-      sources: [
-        { title: 'Wildfire Safety Handbook', page: 8 }
-      ]
-    }
-  }
-
-  return {
-    text: 'ForestGuard can help explain forest-fire causes, prevention, environmental impacts, and safety. This is a demonstration response. The real AI assistant will be connected when the backend is ready.',
-    sources: [
-      { title: 'ForestGuard Demo Knowledge Base', page: 1 }
-    ]
-  }
-}
-
-// -----------------------------
 // Scroll
 // -----------------------------
 
@@ -281,7 +266,7 @@ async function scrollToBottom() {
 }
 
 // -----------------------------
-// Send message
+// Send message to real backend
 // -----------------------------
 
 async function sendMessage() {
@@ -293,6 +278,7 @@ async function sendMessage() {
 
   if (!chat) return
 
+  // Add user message immediately.
   chat.messages.push({
     id: Date.now(),
     role: 'user',
@@ -300,6 +286,7 @@ async function sendMessage() {
     sources: []
   })
 
+  // Set conversation title.
   if (chat.title === 'New conversation') {
     chat.title = text.length > 25
       ? text.substring(0, 25) + '...'
@@ -312,27 +299,32 @@ async function sendMessage() {
   await scrollToBottom()
 
   try {
-    // Temporary mock response delay
-    await new Promise(resolve => setTimeout(resolve, 1200))
-
-    const result = getMockResponse(text)
+    // Send the question to FastAPI.
+    const result = await sendChatMessage(text)
 
     chat.messages.push({
       id: Date.now() + 1,
       role: 'assistant',
-      text: result.text,
-      sources: result.sources
+      text: result.answer,
+      sources: result.sources || [],
+      ragUsed: result.rag_used
     })
 
+    backendStatus.value = 'connected'
+
   } catch (error) {
-    console.error(error)
+    console.error('Chat request failed:', error)
 
     chat.messages.push({
       id: Date.now() + 2,
       role: 'assistant',
-      text: 'Something went wrong. Please try again.',
-      sources: []
+      text: `I couldn't process your question. ${error.message}`,
+      sources: [],
+      error: true
     })
+
+    // A failed request might be a backend outage.
+    await verifyBackendConnection()
 
   } finally {
     loading.value = false
@@ -532,9 +524,17 @@ function startSuggestion(text) {
 
         <!-- Status -->
         <div class="flex items-center gap-2 bg-green-50 px-3 py-2 rounded-full shrink-0">
-          <span class="w-2 h-2 rounded-full bg-green-500"></span>
+          <span
+            class="w-2 h-2 rounded-full"
+            :class="backendStatus === 'connected'
+              ? 'bg-green-500'
+              : backendStatus === 'checking'
+                ? 'bg-yellow-500'
+                : 'bg-red-500'"
+          ></span>
+
           <span class="text-xs font-semibold text-green-700">
-            Demo mode
+            {{ backendStatusLabel }}
           </span>
         </div>
 
